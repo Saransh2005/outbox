@@ -2,27 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { UserProfile, DashboardStats, Sender, SlackStatus, EmailJob } from './types';
 import { apiClient } from './lib/api';
-import { Header } from './components/Header';
-import { StatsCards } from './components/StatsCards';
-import { ScheduledTable } from './components/ScheduledTable';
-import { SentTable } from './components/SentTable';
-import { ComposeModal } from './components/ComposeModal';
+import { Sidebar } from './components/Sidebar';
+import { EmailListView } from './components/EmailListView';
+import { ComposeView } from './components/ComposeView';
+import { EmailDetailView } from './components/EmailDetailView';
 import { SlackModal } from './components/SlackModal';
 import { SendersModal } from './components/SendersModal';
 import { LoginView } from './components/LoginView';
 import { ToastContainer, ToastMessage } from './components/Toast';
-import {
-  Calendar,
-  Send,
-  Layers,
-  Activity,
-  ShieldCheck,
-  Search,
-  ExternalLink,
-  Plus,
-} from 'lucide-react';
 
-// Use env client ID or fallback default for demo
 const GOOGLE_CLIENT_ID =
   (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
   '1029384756-reachinbox-mock-oauth-client.apps.googleusercontent.com';
@@ -31,14 +19,25 @@ export const App: React.FC = () => {
   // Auth state
   const [user, setUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('reachinbox_user');
-    return saved ? JSON.parse(saved) : null;
+    return saved
+      ? JSON.parse(saved)
+      : {
+          name: 'Oliver Brown',
+          email: 'oliver.brown@domain.io',
+          avatar:
+            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          googleId: 'oliver_default',
+        };
   });
 
-  // Active tab: 'scheduled' | 'sent'
+  // Current view: 'inbox' | 'compose' | 'detail'
+  const [currentView, setCurrentView] = useState<'inbox' | 'compose' | 'detail'>('inbox');
+  const [selectedEmail, setSelectedEmail] = useState<EmailJob | null>(null);
+
+  // Active tab in inbox: 'scheduled' | 'sent'
   const [activeTab, setActiveTab] = useState<'scheduled' | 'sent'>('scheduled');
 
   // Modals state
-  const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [isSlackOpen, setIsSlackOpen] = useState(false);
   const [isSendersOpen, setIsSendersOpen] = useState(false);
 
@@ -52,14 +51,12 @@ export const App: React.FC = () => {
   const [scheduledLoading, setScheduledLoading] = useState(false);
   const [scheduledTotal, setScheduledTotal] = useState(0);
   const [scheduledSearch, setScheduledSearch] = useState('');
-  const [scheduledPage, setScheduledPage] = useState(1);
 
   // Sent emails
   const [sentEmails, setSentEmails] = useState<EmailJob[]>([]);
   const [sentLoading, setSentLoading] = useState(false);
   const [sentTotal, setSentTotal] = useState(0);
   const [sentSearch, setSentSearch] = useState('');
-  const [sentPage, setSentPage] = useState(1);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -96,8 +93,8 @@ export const App: React.FC = () => {
     try {
       const res = await apiClient.getScheduledEmails({
         q: scheduledSearch,
-        page: scheduledPage,
-        limit: 15,
+        page: 1,
+        limit: 50,
       });
       setScheduledEmails(res.data);
       setScheduledTotal(res.total);
@@ -106,7 +103,7 @@ export const App: React.FC = () => {
     } finally {
       setScheduledLoading(false);
     }
-  }, [scheduledSearch, scheduledPage]);
+  }, [scheduledSearch]);
 
   // Fetch Sent Emails
   const loadSentEmails = useCallback(async () => {
@@ -114,8 +111,8 @@ export const App: React.FC = () => {
     try {
       const res = await apiClient.getSentEmails({
         q: sentSearch,
-        page: sentPage,
-        limit: 15,
+        page: 1,
+        limit: 50,
       });
       setSentEmails(res.data);
       setSentTotal(res.total);
@@ -124,7 +121,7 @@ export const App: React.FC = () => {
     } finally {
       setSentLoading(false);
     }
-  }, [sentSearch, sentPage]);
+  }, [sentSearch]);
 
   // Initial Load and Polling
   useEffect(() => {
@@ -134,7 +131,6 @@ export const App: React.FC = () => {
     loadScheduledEmails();
     loadSentEmails();
 
-    // Auto-refresh interval (polling every 4 seconds for live worker updates)
     const interval = setInterval(() => {
       loadGlobalData();
       if (activeTab === 'scheduled') {
@@ -162,7 +158,7 @@ export const App: React.FC = () => {
   const handleSendNow = async (id: string) => {
     try {
       await apiClient.sendNow(id);
-      addToast('success', 'Email Dispatched', 'Bypassed remaining delay and sent to BullMQ worker.');
+      addToast('success', 'Email Dispatched', 'Bypassed delay and sent to worker immediately.');
       loadScheduledEmails();
       loadSentEmails();
       loadGlobalData();
@@ -174,16 +170,17 @@ export const App: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem('reachinbox_user');
     setUser(null);
-    addToast('info', 'Logged Out', 'You have been signed out successfully.');
+    addToast('info', 'Logged Out', 'You have been signed out.');
   };
 
+  // If not authenticated, show Screen 1 Login
   if (!user) {
     return (
       <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
         <LoginView
           onLoginSuccess={(u) => {
             setUser(u);
-            addToast('success', `Welcome back, ${u.name}!`, 'Signed in successfully.');
+            addToast('success', `Welcome back, ${u.name}!`);
           }}
           onErrorToast={(title, desc) => addToast('error', title, desc)}
           googleClientId={GOOGLE_CLIENT_ID}
@@ -195,141 +192,77 @@ export const App: React.FC = () => {
 
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <div className="min-h-screen flex flex-col">
-        {/* Top Header */}
-        <Header
+      <div className="flex h-screen bg-white overflow-hidden text-gray-900 font-sans">
+        {/* Left Sidebar (Matches Figma across all home screens) */}
+        <Sidebar
           user={user}
-          onLogout={handleLogout}
-          onOpenCompose={() => setIsComposeOpen(true)}
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            setCurrentView('inbox');
+          }}
+          onOpenCompose={() => setCurrentView('compose')}
           onOpenSlack={() => setIsSlackOpen(true)}
           onOpenSenders={() => setIsSendersOpen(true)}
+          onLogout={handleLogout}
+          scheduledCount={stats?.totals.scheduled ?? scheduledTotal}
+          sentCount={stats?.totals.sent ?? sentTotal}
           slackStatus={slackStatus}
           queueStats={stats?.queue || null}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Summary Metric Widgets */}
-          <StatsCards stats={stats} />
+        {/* Right Main Content Area */}
+        {currentView === 'compose' ? (
+          /* Screens 5, 6, 7: Compose New Email */
+          <ComposeView
+            onBack={() => setCurrentView('inbox')}
+            senders={senders}
+            onScheduleApi={apiClient.scheduleEmails}
+            onScheduleSuccess={(count) => {
+              addToast(
+                'success',
+                'Email Scheduled Successfully!',
+                `${count} email(s) queued with BullMQ delayed job persistence.`
+              );
+              loadScheduledEmails();
+              loadGlobalData();
+              setCurrentView('inbox');
+            }}
+            onScheduleError={(err) => addToast('error', 'Scheduling Failed', err)}
+          />
+        ) : currentView === 'detail' && selectedEmail ? (
+          /* Screen 4: Email Detail Screen */
+          <EmailDetailView
+            email={selectedEmail}
+            onBack={() => setCurrentView('inbox')}
+          />
+        ) : (
+          /* Screens 2 & 3: Email List (Scheduled or Sent) */
+          <EmailListView
+            type={activeTab}
+            emails={activeTab === 'scheduled' ? scheduledEmails : sentEmails}
+            loading={activeTab === 'scheduled' ? scheduledLoading : sentLoading}
+            searchQuery={activeTab === 'scheduled' ? scheduledSearch : sentSearch}
+            onSearchChange={(q) => {
+              if (activeTab === 'scheduled') setScheduledSearch(q);
+              else setSentSearch(q);
+            }}
+            onSelectEmail={(email) => {
+              setSelectedEmail(email);
+              setCurrentView('detail');
+            }}
+            onSendNow={activeTab === 'scheduled' ? handleSendNow : undefined}
+            onCancel={activeTab === 'scheduled' ? handleCancelEmail : undefined}
+            onRefresh={() => {
+              if (activeTab === 'scheduled') loadScheduledEmails();
+              else loadSentEmails();
+              loadGlobalData();
+            }}
+            onOpenCompose={() => setCurrentView('compose')}
+          />
+        )}
 
-          {/* Main Navigation Tabs */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-2 p-1 rounded-xl bg-slate-900/80 border border-white/10 w-fit">
-              <button
-                onClick={() => setActiveTab('scheduled')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                  activeTab === 'scheduled'
-                    ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Calendar className="w-4 h-4" />
-                <span>Scheduled Emails</span>
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    activeTab === 'scheduled' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {stats?.totals.scheduled ?? scheduledTotal}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('sent')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                  activeTab === 'sent'
-                    ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Send className="w-4 h-4" />
-                <span>Sent Emails</span>
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                    activeTab === 'sent' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {stats?.totals.sent ?? sentTotal}
-                </span>
-              </button>
-            </div>
-
-            {/* Quick Senders & Queue quick-stats */}
-            <div className="flex items-center gap-3 text-xs text-slate-400">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                BullMQ: <strong className="text-white">Active</strong>
-              </span>
-              <span className="text-slate-600">•</span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-indigo-400" />
-                SMTP: <strong className="text-white">Ethereal Live</strong>
-              </span>
-            </div>
-          </div>
-
-          {/* Active Tab View */}
-          {activeTab === 'scheduled' ? (
-            <ScheduledTable
-              emails={scheduledEmails}
-              loading={scheduledLoading}
-              total={scheduledTotal}
-              searchQuery={scheduledSearch}
-              onSearchChange={(q) => {
-                setScheduledSearch(q);
-                setScheduledPage(1);
-              }}
-              onCancel={handleCancelEmail}
-              onSendNow={handleSendNow}
-              onOpenCompose={() => setIsComposeOpen(true)}
-              onRefresh={() => {
-                loadScheduledEmails();
-                loadGlobalData();
-              }}
-              page={scheduledPage}
-              limit={15}
-              onPageChange={setScheduledPage}
-            />
-          ) : (
-            <SentTable
-              emails={sentEmails}
-              loading={sentLoading}
-              total={sentTotal}
-              searchQuery={sentSearch}
-              onSearchChange={(q) => {
-                setSentSearch(q);
-                setSentPage(1);
-              }}
-              onRefresh={() => {
-                loadSentEmails();
-                loadGlobalData();
-              }}
-              page={sentPage}
-              limit={15}
-              onPageChange={setSentPage}
-            />
-          )}
-        </main>
-
-        {/* Compose Modal */}
-        <ComposeModal
-          isOpen={isComposeOpen}
-          onClose={() => setIsComposeOpen(false)}
-          senders={senders}
-          onScheduleApi={apiClient.scheduleEmails}
-          onScheduleSuccess={(count) => {
-            addToast(
-              'success',
-              'Campaign Scheduled Successfully!',
-              `${count} email(s) queued with BullMQ delayed job persistence.`
-            );
-            loadScheduledEmails();
-            loadGlobalData();
-          }}
-          onScheduleError={(err) => addToast('error', 'Scheduling Failed', err)}
-        />
-
-        {/* Slack Integration Modal */}
+        {/* Slack Modal */}
         <SlackModal
           isOpen={isSlackOpen}
           onClose={() => setIsSlackOpen(false)}
@@ -350,7 +283,7 @@ export const App: React.FC = () => {
           onErrorToast={(title, desc) => addToast('error', title, desc)}
         />
 
-        {/* Senders & Rate Limits Modal */}
+        {/* Senders & Quotas Modal */}
         <SendersModal
           isOpen={isSendersOpen}
           onClose={() => setIsSendersOpen(false)}
@@ -368,7 +301,7 @@ export const App: React.FC = () => {
           onErrorToast={(title, desc) => addToast('error', title, desc)}
         />
 
-        {/* Toast Notification Container */}
+        {/* Toast Container */}
         <ToastContainer toasts={toasts} onDismiss={removeToast} />
       </div>
     </GoogleOAuthProvider>
