@@ -54,8 +54,14 @@ const ToastItem: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => void
     >
       {icons[toast.type]}
       <div className="flex-1 text-sm">
-        <p className="font-semibold text-white">{toast.title}</p>
-        {toast.description && <p className="text-slate-300 text-xs mt-0.5">{toast.description}</p>}
+        <p className="font-semibold text-white">{String(toast.title || '')}</p>
+        {toast.description && (
+          <p className="text-slate-300 text-xs mt-0.5">
+            {typeof toast.description === 'object'
+              ? JSON.stringify(toast.description)
+              : String(toast.description)}
+          </p>
+        )}
       </div>
       <button
         onClick={() => onDismiss(toast.id)}

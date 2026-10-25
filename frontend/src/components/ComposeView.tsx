@@ -176,7 +176,15 @@ export const ComposeView: React.FC<ComposeViewProps> = ({
       onScheduleSuccess(allRecipients.length);
       onBack();
     } catch (err: any) {
-      onScheduleError(err.response?.data?.error || err.message || 'Failed to schedule emails');
+      const msg =
+        typeof err?.response?.data?.error === 'string'
+          ? err.response.data.error
+          : err?.response?.data?.error?.message
+          ? err.response.data.error.message
+          : err?.response?.data?.message
+          ? err.response.data.message
+          : err?.message || 'Failed to schedule emails';
+      onScheduleError(String(msg));
     } finally {
       setIsSubmitting(false);
     }

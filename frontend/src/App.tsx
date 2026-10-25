@@ -53,9 +53,15 @@ export const App: React.FC = () => {
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const addToast = (type: 'success' | 'error' | 'info', title: string, description?: string) => {
+  const addToast = (type: 'success' | 'error' | 'info', title: string, description?: any) => {
     const id = `${Date.now()}_${Math.random()}`;
-    setToasts((prev) => [...prev, { id, type, title, description }]);
+    const descStr =
+      typeof description === 'object'
+        ? description?.message || JSON.stringify(description)
+        : typeof description === 'string'
+        ? description
+        : '';
+    setToasts((prev) => [...prev, { id, type, title: String(title || ''), description: descStr }]);
   };
 
   const removeToast = (id: string) => {
