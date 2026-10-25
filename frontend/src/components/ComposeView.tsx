@@ -42,8 +42,36 @@ export const ComposeView: React.FC<ComposeViewProps> = ({
   onScheduleSuccess,
   onScheduleError,
 }) => {
+  // Fallback senders so dropdown is never empty even if API is loading
+  const availableSenders =
+    senders.length > 0
+      ? senders
+      : [
+          {
+            id: 'default-1',
+            name: 'Oliver Brown',
+            email: 'oliver.brown@domain.io',
+            isDefault: true,
+            hourlyLimit: 100,
+          },
+          {
+            id: 'default-2',
+            name: 'Alex Morgan',
+            email: 'alex@reachinbox.ai',
+            isDefault: false,
+            hourlyLimit: 100,
+          },
+          {
+            id: 'default-3',
+            name: 'Sarah Connor',
+            email: 'sarah@growthoutbox.io',
+            isDefault: false,
+            hourlyLimit: 50,
+          },
+        ];
+
   const [selectedSenderEmail, setSelectedSenderEmail] = useState<string>(
-    senders.find((s) => s.isDefault)?.email || senders[0]?.email || 'oliver.brown@domain.io'
+    availableSenders.find((s) => s.isDefault)?.email || availableSenders[0]?.email || 'oliver.brown@domain.io'
   );
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -279,7 +307,7 @@ export const ComposeView: React.FC<ComposeViewProps> = ({
               onChange={(e) => setSelectedSenderEmail(e.target.value)}
               className="appearance-none bg-gray-100/90 hover:bg-gray-100 border border-transparent rounded-lg pl-3 pr-8 py-1.5 text-xs font-medium text-gray-800 focus:outline-none focus:border-gray-300 cursor-pointer"
             >
-              {senders.map((s) => (
+              {availableSenders.map((s) => (
                 <option key={s.id} value={s.email}>
                   {s.email}
                 </option>
