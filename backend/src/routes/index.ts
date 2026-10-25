@@ -2,8 +2,13 @@ import { Router } from 'express';
 import { EmailController } from '../controllers/emailController';
 import { SlackController } from '../controllers/slackController';
 import { SenderController } from '../controllers/senderController';
+import { AuthController } from '../controllers/authController';
 
 const router = Router();
+
+// Auth endpoints
+router.post('/auth/google', AuthController.handleGoogleAuth);
+router.get('/auth/me', AuthController.getCurrentUser);
 
 // Health
 router.get('/health', (req, res) => {

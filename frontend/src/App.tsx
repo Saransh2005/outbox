@@ -16,18 +16,10 @@ const GOOGLE_CLIENT_ID =
   '1029384756-reachinbox-mock-oauth-client.apps.googleusercontent.com';
 
 export const App: React.FC = () => {
-  // Auth state
+  // Auth state - starts null so user sees Login Screen first
   const [user, setUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('reachinbox_user');
-    return saved
-      ? JSON.parse(saved)
-      : {
-          name: 'Oliver Brown',
-          email: 'oliver.brown@domain.io',
-          avatar:
-            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-          googleId: 'oliver_default',
-        };
+    return saved ? JSON.parse(saved) : null;
   });
 
   // Current view: 'inbox' | 'compose' | 'detail'

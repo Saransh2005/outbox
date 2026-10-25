@@ -7,6 +7,17 @@ const api = axios.create({
 });
 
 export const apiClient = {
+  // Auth
+  async authenticateGoogleUser(data: {
+    email: string;
+    name?: string;
+    avatar?: string;
+    googleId?: string;
+  }) {
+    const res = await api.post('/auth/google', data);
+    return res.data;
+  },
+
   // Stats & Health
   async getStats(): Promise<DashboardStats> {
     const res = await api.get<DashboardStats>('/stats');

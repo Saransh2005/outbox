@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from 'jwt-decode';
 import { UserProfile } from '../types';
+import { apiClient } from '../lib/api';
 
 interface LoginViewProps {
   onLoginSuccess: (user: UserProfile) => void;
@@ -15,50 +15,48 @@ export const LoginView: React.FC<LoginViewProps> = ({
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const triggerGoogleLogin = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
+      setLoading(true);
       try {
-        // Fetch user profile using access_token
+        // Fetch user profile using access_token from official Google API
         const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
           headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
         });
         const data = await res.json();
 
         const userProfile: UserProfile = {
-          name: data.name || 'Oliver Brown',
-          email: data.email || 'oliver.brown@domain.io',
+          name: data.name || data.given_name || 'Google User',
+          email: data.email,
           avatar:
             data.picture ||
             'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
           googleId: data.sub,
         };
 
+        // Persist authenticated Google user into PostgreSQL database
+        await apiClient.authenticateGoogleUser(userProfile).catch((e) =>
+          console.warn('Could not sync user to DB:', e)
+        );
+
         localStorage.setItem('reachinbox_user', JSON.stringify(userProfile));
         onLoginSuccess(userProfile);
       } catch (err: any) {
         console.error('Failed to fetch Google profile:', err);
-        handleDemoSignIn();
+        onErrorToast('Google Sign-In Failed', err.message);
+      } finally {
+        setLoading(false);
       }
     },
-    onError: () => {
-      // Graceful fallback to demo sign in
-      handleDemoSignIn();
+    onError: (error) => {
+      console.error('Google Sign-In Error:', error);
+      onErrorToast('Google Sign-In Error', 'Popup closed or invalid client configuration. Please check your Google Client ID.');
     },
   });
 
-  const handleDemoSignIn = () => {
-    const defaultUser: UserProfile = {
-      name: 'Oliver Brown',
-      email: 'oliver.brown@domain.io',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      googleId: 'google_user_demo_123',
-    };
-    localStorage.setItem('reachinbox_user', JSON.stringify(defaultUser));
-    onLoginSuccess(defaultUser);
-  };
-
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
       onErrorToast('Missing Email', 'Please enter your email ID');
@@ -69,6 +67,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
       email: email,
       avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     };
+
+    // Save user to backend PostgreSQL
+    await apiClient.authenticateGoogleUser(user).catch(() => null);
+
     localStorage.setItem('reachinbox_user', JSON.stringify(user));
     onLoginSuccess(user);
   };
