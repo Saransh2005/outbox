@@ -1,5 +1,5 @@
 import { Worker, Job } from 'bullmq';
-import { redisConfig } from '../config/redis';
+import { getBullMQConnection } from '../config/redis';
 import { CONFIG } from '../config/constants';
 import { prisma } from '../config/prisma';
 import { EmailJobData, emailQueue } from '../services/queueService';
@@ -22,7 +22,7 @@ export class EmailWorker {
         return this.processEmailJob(job);
       },
       {
-        connection: redisConfig,
+        connection: getBullMQConnection(),
         concurrency: CONFIG.WORKER_CONCURRENCY,
       }
     );

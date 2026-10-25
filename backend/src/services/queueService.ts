@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { redisConfig } from '../config/redis';
+import { getBullMQConnection } from '../config/redis';
 import { CONFIG } from '../config/constants';
 import { prisma } from '../config/prisma';
 import { EmailStatus } from '@prisma/client';
@@ -17,7 +17,7 @@ export interface EmailJobData {
 }
 
 export const emailQueue = new Queue<EmailJobData>(CONFIG.QUEUE_NAME, {
-  connection: redisConfig,
+  connection: getBullMQConnection(),
   defaultJobOptions: {
     attempts: 3,
     backoff: {
